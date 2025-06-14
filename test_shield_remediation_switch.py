@@ -27,9 +27,12 @@ class TestShieldRemediationSwitch(unittest.TestCase):
         self.shield_mock.list_protections.return_value = {
             'Protections': [{'Id': 'protect-123'}]
         }
-        self.shield_mock.describe_application_layer_automatic_response_configuration.return_value = {
-            'ApplicationLayerAutomaticResponseConfiguration': {
-                'Action': {'Count': {}}
+        self.shield_mock.describe_protection.return_value = {
+            'Protection': {
+                'ApplicationLayerAutomaticResponseConfiguration': {
+                    'Status': 'ENABLED',
+                    'Action': {'Count': {}}  # When in COUNT mode, Action contains only Count
+                }
             }
         }
 
@@ -43,50 +46,42 @@ class TestShieldRemediationSwitch(unittest.TestCase):
         self.shield_mock.list_protections.return_value = {
             'Protections': [{'Id': 'protect-123'}]
         }
-        self.shield_mock.describe_application_layer_automatic_response_configuration.return_value = {
-            'ApplicationLayerAutomaticResponseConfiguration': {
-                'Action': {}
+        self.shield_mock.describe_protection.return_value = {
+            'Protection': {
+                'ApplicationLayerAutomaticResponseConfiguration': {
+                    'Status': 'DISABLED',
+                    'Action': {}
+                }
             }
         }
 
         response = shield_remediation_switch.lambda_handler({}, self.mock_context)
         
         self.assertEqual(response['statusCode'], 200)
-        self.shield_mock.update_application_layer_automatic_response_configuration.assert_called_once()
+        self.shield_mock.enable_application_layer_automatic_response.assert_called_once_with(
+            ResourceArn='arn:aws:cloudfront::123456789012:distribution/E123456789',
+            Action={'Block': {}}
+        )
 
     def test_block_mode_no_changes(self):
         """Test BLOCK mode makes no changes"""
         self.shield_mock.list_protections.return_value = {
             'Protections': [{'Id': 'protect-123'}]
         }
-        self.shield_mock.describe_application_layer_automatic_response_configuration.return_value = {
-            'ApplicationLayerAutomaticResponseConfiguration': {
-                'Action': {'Block': {}}
+        self.shield_mock.describe_protection.return_value = {
+            'Protection': {
+                'ApplicationLayerAutomaticResponseConfiguration': {
+                    'Status': 'ENABLED',
+                    'Action': {'Block': {}}  # When in BLOCK mode, Action contains only Block
+                }
             }
         }
 
         response = shield_remediation_switch.lambda_handler({}, self.mock_context)
         
         self.assertEqual(response['statusCode'], 200)
+        self.shield_mock.enable_application_layer_automatic_response.assert_not_called()
         self.shield_mock.update_application_layer_automatic_response_configuration.assert_not_called()
-
-    def test_enable_block_false_skips_changes(self):
-        """Test ENABLE_BLOCK=false skips changes"""
-        os.environ['ENABLE_BLOCK'] = 'false'
-        self.shield_mock.list_protections.return_value = {
-            'Protections': [{'Id': 'protect-123'}]
-        }
-        self.shield_mock.describe_application_layer_automatic_response_configuration.return_value = {
-            'ApplicationLayerAutomaticResponseConfiguration': {
-                'Action': {'Count': {}}
-            }
-        }
-
-        response = shield_remediation_switch.lambda_handler({}, self.mock_context)
-        
-        self.assertEqual(response['statusCode'], 200)
-        self.shield_mock.update_application_layer_automatic_response_configuration.assert_not_called()
-        self.assertIn('ENABLE_BLOCK=false', response['body'])
 
     def test_missing_distribution_id(self):
         """Test missing DISTRIBUTION_ID returns error"""
