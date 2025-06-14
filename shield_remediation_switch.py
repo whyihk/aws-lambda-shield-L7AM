@@ -98,9 +98,9 @@ def lambda_handler(event, context):
                 }
             else:
                 # Unknown action - log warning but don't make changes
-                logger.warning(f"Unknown action for ENABLED protection {protection_id} (CloudFront {cloudfront_dist_id}): {current_action}")
+                logger.error(f"Unknown action for ENABLED protection {protection_id} (CloudFront {cloudfront_dist_id}): {current_action}")
                 return {
-                    'statusCode': 200,
+                    'statusCode': 500,
                     'body': f'Unknown action - no changes made for CloudFront {cloudfront_dist_id}'
                 }
         else:
