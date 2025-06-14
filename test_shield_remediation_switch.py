@@ -103,5 +103,42 @@ class TestShieldRemediationSwitch(unittest.TestCase):
         self.assertEqual(response['statusCode'], 404)
         self.assertIn('No Shield protection found', response['body'])
 
+    def test_multiple_protections_found(self):
+        """Test multiple protections found returns error"""
+        self.shield_mock.list_protections.return_value = {
+            'Protections': [
+                {'Id': 'protect-123'},
+                {'Id': 'protect-456'}
+            ]
+        }
+
+        response = shield_remediation_switch.lambda_handler({}, self.mock_context)
+        
+        self.assertEqual(response['statusCode'], 400)
+        self.assertIn('Multiple protections found', response['body'])
+
+    def test_proper_inclusion_filters_used(self):
+        """Test list_protections uses correct inclusion filters"""
+        self.shield_mock.list_protections.return_value = {
+            'Protections': [{'Id': 'protect-123'}]
+        }
+        self.shield_mock.describe_protection.return_value = {
+            'Protection': {
+                'ApplicationLayerAutomaticResponseConfiguration': {
+                    'Status': 'ENABLED',
+                    'Action': {'Block': {}}
+                }
+            }
+        }
+
+        shield_remediation_switch.lambda_handler({}, self.mock_context)
+        
+        self.shield_mock.list_protections.assert_called_once_with(
+            InclusionFilters={
+                'ResourceArns': ['arn:aws:cloudfront::123456789012:distribution/E123456789'],
+                'ResourceTypes': ['CLOUDFRONT_DISTRIBUTION']
+            }
+        )
+
 if __name__ == '__main__':
     unittest.main()
